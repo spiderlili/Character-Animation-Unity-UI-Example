@@ -106,11 +106,11 @@ Shader "Custom/GreenScreenChromaKey"
                 color.a = chromaKeyAlpha;
 
                 #ifdef UNITY_UI_CLIP_RECT
-                    col.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
+                    color.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP
-                    clip(col.a - 0.001);
+                    color(col.a - 0.001);
                 #endif
                 
                 return color;
