@@ -7,12 +7,46 @@ Shader "Custom/GreenScreenChromaKey"
         _MaskRange("Mask Hue Range", Float) = 0.21
         _MaskFuzziness("Mask Fuzziness", Float) = 0.43
         [MainTexture] _BaseMap("Base Map", 2D) = "white" {}
+        
+        _StencilComp ("Stencil Comparison", Float) = 8
+        _Stencil ("Stencil ID", Float) = 0
+        _StencilOp ("Stencil Operation", Float) = 0
+        _StencilWriteMask ("Stencil Write Mask", Float) = 255
+        _StencilReadMask ("Stencil Read Mask", Float) = 255
+        
+        _ColorMask ("Color Mask", Float) = 15
+        [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
     }
 
     SubShader
     {
-        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
-
+        Tags
+        {
+            "RenderPipeline"="UniversalPipeline"
+            "Queue"="Transparent"
+            "IgnoreProjector"="True"
+            "RenderType"="Transparent"
+            "PreviewType"="Plane"
+            "CanUseSpriteAtlas"="True"
+        }
+        
+        Stencil
+        {
+            Ref [_Stencil]
+            Comp [_StencilComp]
+            Pass [_StencilOp]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+        }
+        
+        LOD 100
+        ZWrite Off
+        Cull Off
+        Lighting Off
+        ZTest [unity_GUIZTestMode]
+        Blend SrcAlpha OneMinusSrcAlpha
+        ColorMask [_ColorMask]
+        
         Pass
         {
             HLSLPROGRAM
@@ -22,6 +56,9 @@ Shader "Custom/GreenScreenChromaKey"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+            #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
+            #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
+            
             float4 ColorMask(float3 In, float3 MaskColor, float Range, float Fuzziness)
             {
                 float Distance = distance(MaskColor, In);
@@ -32,12 +69,14 @@ Shader "Custom/GreenScreenChromaKey"
             {
                 float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
+                half4 color : COLOR;
             };
 
             struct Varyings
             {
                 float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                half4 color : COLOR;
             };
 
             TEXTURE2D(_BaseMap);
@@ -55,6 +94,7 @@ Shader "Custom/GreenScreenChromaKey"
                 Varyings OUT;
                 OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
+                OUT.color = IN.color;
                 return OUT;
             }
 
@@ -64,6 +104,15 @@ Shader "Custom/GreenScreenChromaKey"
                 const half4 chromaKeyColor = ColorMask(color.rgb, _MaskColor, _MaskRange, _MaskFuzziness);
                 const half chromaKeyAlpha = 1 - chromaKeyColor;
                 color.a = chromaKeyAlpha;
+
+                #ifdef UNITY_UI_CLIP_RECT
+                    col.a *= UnityGet2DClipping(i.worldPosition.xy, _ClipRect);
+                #endif
+
+                #ifdef UNITY_UI_ALPHACLIP
+                    clip(col.a - 0.001);
+                #endif
+                
                 return color;
             }
             ENDHLSL
